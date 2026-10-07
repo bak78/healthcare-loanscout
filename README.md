@@ -1,0 +1,137 @@
+# Healthcare LoanScout
+
+> **Prototype, branded edition.** Capital Sense Funding's colours and logo are
+> in the window. The logo in `assets\` is the company's — keep this project
+> private and check before sharing it outside the company.
+
+Finds **healthcare organizations** — home care agencies, dental practices,
+therapy clinics and more — in the federal NPI registry, with the **owner's
+first and last name**. It then looks each one up on Google to get a current
+phone number, rating and website, reads the website for an email address and
+signs of growth, and writes a ranked CSV of leads with the evidence behind
+every score.
+
+```
+NPI registry ──▶ owner name, ──▶ Google listing ──▶ website crawl ──▶ healthcare_leads.csv
+(official, free,  field, rank     (via Serper:       (email, growth
+ nationwide)                       phone, rating)     signals)
+```
+
+Every healthcare provider that bills insurance must register in the NPI
+registry, and each organization's record names its **authorized official** —
+usually the owner or president — with a title and a direct phone number. So
+the registry gives both the lead list and the person to call, in every state,
+for free.
+
+## The easy way: the window
+
+Double-click **`Healthcare LoanScout GUI.bat`**. The first time, it sets
+itself up (about a minute). Then:
+
+1. **Where** — pick a state and type the start of the ZIP codes (`191` is
+   Philadelphia; at least two digits; blank = the whole state). Every
+   healthcare field is searched; the spreadsheet's `healthcare_industry`
+   column says which each organization is in, so filter there.
+2. **Preview (free)** — searches the registry and ranks every matching
+   organization from registry facts alone. Writes
+   `out\healthcare_leads_preview.csv`. No credits used.
+3. **Run** — looks up the top organizations on Google (about 1 Serper credit
+   each), crawls their websites, and writes `out\healthcare_leads.csv`. Run
+   again to continue down the list; organizations already done are skipped.
+4. **Open results** opens the newest spreadsheet. **Stop** ends a run early;
+   finished rows are kept.
+
+*Run* needs a Serper key in `.env` (below). *Preview* doesn't.
+
+## What's in the spreadsheet
+
+The first columns are the ones to work from:
+
+| Column | Meaning |
+|---|---|
+| `first_name`, `last_name`, `title` | The authorized official from the NPI registry |
+| `decision_maker` | owner / president · clinician (likely owner) · manager / administrator · office staff |
+| `email` | From the organization's website. The official's own address (jane.doe@…) is preferred over info@ |
+| `phone` | Google listing's phone, else the NPI practice phone, else the website's |
+| `company_name` | The name the public knows it by (its DBA when it has one) |
+| `healthcare_industry` | e.g. *Home care*, *Dental*, *Behavioral health* — one of the fields below |
+| `specialty` | the exact NPI specialty, e.g. *In Home Supportive Care* |
+| `score` | 0–100 weight; see below |
+| `google_rating`, `google_reviews` | From the Google listing found through Serper |
+| `official_phone` | The official's own number from the registry — often a direct line |
+
+Then the website, legal name, address, NPI number, years registered,
+locations, the top three pieces of evidence, and notes.
+
+## The score (weight)
+
+The same engine as PPP LoanScout: every point comes from a piece of evidence,
+shown in the `evidence_` columns. Three kinds of evidence:
+
+- **NPI registry** (free): in a lead field; registered 3+ years; the official
+  is the owner (14), a clinician (10), a manager (5); 2+ practice locations.
+- **Google, via Serper** (the Run step): a listing matched at the registry
+  address (10); 50+ ratings (14) or 10–49 (7); 4.0 stars or better (5). A busy
+  listing is the best public sign of a practice's size.
+- **Website**: an email found (6), the official's own email (4), and growth
+  signals — hiring caregivers or nurses, accepting new patients, new
+  locations, Medicare/Medicaid certification. Lenders, public companies and
+  similar are disqualified.
+
+All weights are in `config\healthcare.yaml` (registry and Google) and
+`config\signals.yaml` (website). Edit and re-run.
+
+A preview scores registry facts only, so its scores are lower; the Run adds
+Google and the website on top.
+
+## Fields
+
+`config\healthcare.yaml` lists the fields and the NPI specialty names each
+one covers — home care, hospice, nursing & assisted living, adult day care,
+behavioral health, dental, therapy, chiropractic, eye care, foot care,
+primary & urgent care, pharmacy, medical equipment, medical transport, labs,
+surgery centers. Hospitals, government bodies, universities and sub-units of
+larger organizations are left out.
+
+## Command line
+
+```powershell
+python -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
+copy .env.example .env
+notepad .env
+
+.venv\Scripts\python -m healthcare_loanscout run --dry-run                       # free preview
+.venv\Scripts\python -m healthcare_loanscout run --field "Home care" --limit 50  # ~50 credits
+.venv\Scripts\python -m healthcare_loanscout run --state NJ --zip 080,081 --field Dental
+```
+
+| `run` option | Default | Meaning |
+|---|---|---|
+| `--state` | `PA` | two-letter state |
+| `--zip` | `191` | ZIP code starts (2–5 digits), comma-separated; `all` for the whole state |
+| `--field` | all | one field as named in healthcare.yaml; repeat for several |
+| `--limit` | `50` | organizations looked up this run; `0` = no cap |
+| `--dry-run` | off | free preview, no Google lookups |
+| `--no-resume` | off | start the CSV over |
+
+Registry searches are cached in `data\npi_cache` for 7 days.
+
+## What it can't do yet
+
+- **No Google listing ≠ closed.** Many home care agencies are run from a
+  home office and have no Google listing; such rows say "may have closed or
+  moved" and get no Google points, but the name and phones still come from
+  the registry. In a first test, 8 of 15 Philadelphia home care agencies and
+  9 of 10 dental practices had a matching listing.
+- **Emails come only from websites**, so about half the home care agencies
+  have none. Some site emails are not ideal (a recruiting address, a sister
+  business's); check before mailing.
+- The authorized official is whoever signed the registration. Usually the
+  owner, but check the `title` column.
+
+## Tests
+
+```powershell
+.venv\Scripts\python -m pytest
+```

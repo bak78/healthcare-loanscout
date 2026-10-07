@@ -1,0 +1,102 @@
+# Which healthcare organizations count as leads, and how NPI and Google facts
+# score. Edit and re-run — no code change needed.
+#
+# Source: the NPI registry (CMS NPPES), the federal list of every healthcare
+# provider that bills insurance. Free, public, no key:
+# https://npiregistry.cms.hhs.gov/api-page
+
+# Default area. The registry won't search a whole state by itself, so a run
+# always searches field by field; ZIP code starts narrow it (two digits at
+# least — the registry's rule). Leave the list empty for the whole state.
+state: PA
+zip_prefixes: ["191"]
+
+# Organizations looked up per run, best-ranked first. Each costs about one
+# Serper credit. The next run continues down the list.
+default_limit: 50
+
+# Healthcare fields, in the order shown in the window's Field list.
+#   name        what the CSV's "field" column says
+#   taxonomies  NPI specialty names searched for this field. An organization
+#               belongs to the first field whose names appear in its PRIMARY
+#               NPI specialty, so order matters where names overlap.
+fields:
+  - name: Home care
+    taxonomies: ["Home Health", "In Home Supportive Care", "Personal Care Attendant",
+                 "Home Infusion", "Respite Care"]
+  - name: Hospice
+    taxonomies: ["Hospice Care, Community Based"]
+  - name: Nursing & assisted living
+    taxonomies: ["Skilled Nursing Facility", "Assisted Living Facility",
+                 "Nursing Facility/Intermediate Care Facility"]
+  - name: Adult day care
+    taxonomies: ["Adult Day Care"]
+  - name: Behavioral health
+    taxonomies: ["Community/Behavioral Health", "Mental Health", "Psychologist", "Counselor",
+                 "Social Worker", "Behavior Analyst", "Substance Abuse Rehabilitation Facility"]
+  - name: Dental
+    taxonomies: ["Dentist"]
+  - name: Therapy (physical, occupational, speech)
+    taxonomies: ["Physical Therapist", "Occupational Therapist", "Speech-Language Pathologist"]
+  - name: Chiropractic
+    taxonomies: ["Chiropractor"]
+  - name: Eye care
+    taxonomies: ["Optometrist"]
+  - name: Foot care
+    taxonomies: ["Podiatrist"]
+  - name: Primary & urgent care
+    taxonomies: ["Family Medicine", "Internal Medicine", "Pediatrics", "Urgent Care"]
+  - name: Pharmacy
+    taxonomies: ["Pharmacy"]
+  - name: Medical equipment & supplies
+    taxonomies: ["Durable Medical Equipment & Medical Supplies", "Prosthetic/Orthotic Supplier"]
+  - name: Medical transport
+    taxonomies: ["Ambulance", "Non-emergency Medical Transport (VAN)"]
+  - name: Labs
+    taxonomies: ["Clinical Medical Laboratory"]
+  - name: Surgery centers
+    taxonomies: ["Ambulatory Surgical"]
+
+# Never leads: hospitals, government and public bodies, and large systems.
+# Matched case-insensitively against the primary NPI specialty...
+exclude_taxonomies: ["Hospital", "Federally Qualified Health Center", "Public Health",
+                     "Military", "Veterans", "Indian Health", "Local Education Agency"]
+# ...and against the organization's name, as whole words.
+exclude_name_words: ["hospital", "university", "health system", "school district",
+                     "county of", "city of", "department of", "commonwealth", "state of"]
+
+# Authorized-official titles, sorted into how likely that person decides on
+# a loan. Checked in this order, so "office manager" counts as staff before
+# "manager" could make it management. Matched as words, case-insensitively.
+title_levels:
+  staff: ["office manager", "receptionist", "billing", "biller", "assistant",
+          "coordinator", "credentialing", "clerk", "specialist", "consultant", "front desk"]
+  owner: ["owner", "co-owner", "president", "ceo", "chief executive", "founder",
+          "managing member", "member", "proprietor", "principal", "partner", "chairman",
+          "sole"]
+  clinician: ["dentist", "physician", "doctor", "chiropractor", "optometrist",
+              "podiatrist", "therapist", "pharmacist", "psychologist", "counselor",
+              "dds", "dmd", "md", "do", "dpm", "od", "dc", "pt", "rn", "lpc", "lcsw",
+              "nurse", "practitioner", "provider"]
+  manager: ["administrator", "director", "manager", "coo", "cfo", "vice president", "vp",
+            "officer", "secretary", "treasurer", "supervisor", "executive"]
+
+# Score weights for NPI and Google facts. They join the website signals in
+# signals.yaml as "fit", so every point stays traceable to evidence.
+weights:
+  npi_registered: 8          # an active NPI organization in a lead field
+  established: 10            # NPI registered at least established_years ago
+  established_years: 3
+  decision_maker:            # who the authorized official is
+    owner: 14
+    clinician: 10
+    manager: 5
+    staff: 0
+    unknown: 2
+  multi_location: 10         # the same organization at 2+ practice addresses
+  google_listing: 10         # a Google listing matched at the NPI address
+  reviews_many: 14           # 50+ Google ratings: a busy, established practice
+  reviews_some: 7            # 10-49 Google ratings
+  good_rating: 5             # 4.0 stars or better, from at least 10 ratings
+  email_found: 6             # the website publishes an email address
+  email_matches_official: 4  # ...and one belongs to the authorized official
