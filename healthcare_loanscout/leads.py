@@ -15,9 +15,10 @@ from datetime import date
 
 from .config import Rules
 from .contacts import is_role_address
-from .crawl import SiteCrawl, crawl_site, is_crawlable
+from .crawl import SiteCrawl, crawl_site, is_crawlable, registered_domain
 from .emailcheck import FREE_MAIL, EmailChecker, domain_of
 from .fetch import PoliteFetcher
+from .hunter import HunterClient
 from .npi import HealthRules, Organization
 from .places import Listing, PlacesClient
 from .score import Score, score_site
@@ -147,6 +148,7 @@ def build_lead(
     max_pages: int,
     today: date | None = None,
     email_checker: EmailChecker | None = None,
+    hunter: HunterClient | None = None,
 ) -> Lead:
     """Look the organization up on Google, crawl its website, and score it.
 
@@ -167,10 +169,21 @@ def build_lead(
 
     email, email_page, is_official = pick_email(crawl, org, email_checker)
 
+    # The website gave no email (or, set to "always", only a front-desk one):
+    # ask Hunter for the official's own address at the website's domain.
+    wanted = not email or (health.hunter_when == "always" and not is_official)
+    domain = registered_domain(listing.website) if is_crawlable(listing.website or "", rules) else ""
+    if hunter is not None and wanted and domain and org.official_first and org.official_last:
+        found = hunter.find(domain, org.official_first, org.official_last)
+        if found.email and email_is_theirs(found.email, domain) and (
+                email_checker is None or email_checker.ok(found.email)):
+            email, email_page, is_official = found.email, f"Hunter.io (verified, confidence {found.score})", True
+
     hits = npi_hits(org, health, today) + google_hits(listing, health)
     if email:
         w = health.weights
-        hits.append(_hit("email_found", w.get("email_found", 6), f"Email on website: {email}", email_page))
+        where = "Hunter.io" if email_page.startswith("Hunter") else "website"
+        hits.append(_hit("email_found", w.get("email_found", 6), f"Email ({where}): {email}", email_page))
         if is_official:
             hits.append(_hit("email_is_official", w.get("email_matches_official", 4),
                              f"{email} carries the official's name", email_page))

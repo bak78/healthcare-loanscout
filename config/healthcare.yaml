@@ -22,6 +22,14 @@ default_limit: 50
 # credit, and aren't looked up again.
 require_email: true
 
+# Hunter.io (optional: HUNTER_API_KEY in .env). Given the official's name and
+# the website's domain, Hunter finds their email; only addresses Hunter has
+# verified are kept. Each address found uses one Hunter credit.
+#   missing  ask Hunter only when the website shows no working email
+#   always   also ask when the website shows only a front-desk address
+#            (info@, office@), to reach the official directly
+hunter_when: missing
+
 # Healthcare fields, in the order shown in the window's Field list.
 #   name        what the CSV's "field" column says
 #   taxonomies  NPI specialty names searched for this field. An organization

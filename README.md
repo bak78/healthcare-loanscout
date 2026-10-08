@@ -105,6 +105,23 @@ These checks can't tell whether one mailbox still exists (whether jsmith@ left
 the company). A paid verifier — NeverBounce, ZeroBounce — checks that for
 about a cent an address; worth it before a large send.
 
+## Hunter.io (optional)
+
+With `HUNTER_API_KEY` in `.env`, a Run asks Hunter for the official's own
+email whenever the website shows none: Hunter takes the official's name (from
+the registry) and the website's domain (from Google) and returns the likely
+address. Only addresses Hunter has **verified** are kept; "accept all" and
+"unknown" ones are logged and left out. The CSV's `email_source` column says
+"Hunter.io (verified…)" for these.
+
+Hunter charges a credit for each address it returns, verified or not, and
+nothing for a search that finds nothing. The free plan has 50 a month. Set
+`hunter_when: always` in `config\healthcare.yaml` to also replace front-desk
+addresses (info@) with the official's own — more credits, better contacts.
+
+Hunter needs a website. An organization with no Google listing, or a listing
+without a website, can't get an email from Hunter or any similar service.
+
 ## Fields
 
 `config\healthcare.yaml` lists the fields and the NPI specialty names each
