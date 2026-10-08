@@ -84,6 +84,7 @@ class HealthRules:
     exclude_name_words: tuple[str, ...]
     title_levels: tuple[tuple[str, tuple[str, ...]], ...]
     weights: dict = field(default_factory=dict)
+    require_email: bool = True
 
     @property
     def field_names(self) -> tuple[str, ...]:
@@ -170,6 +171,7 @@ def load_health_rules(path: Path | str = DEFAULT_HEALTHCARE_PATH) -> HealthRules
             (level, tuple(str(w) for w in levels.get(level) or [])) for level in TITLE_LEVELS
         ),
         weights=dict(raw.get("weights") or {}),
+        require_email=bool(raw.get("require_email", True)),
     )
 
 

@@ -12,6 +12,7 @@ next run.
 from __future__ import annotations
 
 import argparse
+import csv
 import logging
 import sys
 import threading
@@ -20,6 +21,7 @@ from dataclasses import dataclass
 
 from .config import ConfigError, load_settings
 from .crawl import DEFAULT_MAX_PAGES
+from .emailcheck import EmailChecker
 from .export import CsvWriter, build_row, sort_csv_by_score
 from .fetch import PoliteFetcher
 from .leads import build_lead
@@ -64,6 +66,8 @@ class RunSummary:
     already_done: int = 0
     attempted: int = 0
     written: int = 0
+    no_email: int = 0
+    shared_email: int = 0
     retry_later: int = 0
     with_name: int = 0
     with_owner: int = 0
@@ -94,6 +98,10 @@ class RunSummary:
         log.info("%-32s %d", "processed this run", self.attempted)
         if self.retry_later:
             log.info("%-32s %d", "  failed (will retry)", self.retry_later)
+        if self.no_email:
+            log.info("%-32s %d", "  left out: no working email", self.no_email)
+        if self.shared_email:
+            log.info("%-32s %d", "  left out: email already used", self.shared_email)
         log.info("%-32s %d", "  with a first and last name", self.with_name)
         log.info("%-32s %d", "    who is the owner/president", self.with_owner)
         log.info("%-32s %d", "  with a phone number", self.with_phone)
@@ -165,6 +173,8 @@ def run_leads(options: RunOptions, stop: threading.Event | None = None,
 
     places = places or PlacesClient(api_key)
     fetcher = PoliteFetcher(settings.user_agent, default_delay=options.delay)
+    checker = EmailChecker()
+    used_emails = set() if options.no_resume else emails_in(options.out)
 
     try:
         with CsvWriter(options.out, resume=not options.no_resume) as writer:
@@ -183,7 +193,8 @@ def run_leads(options: RunOptions, stop: threading.Event | None = None,
 
             with ThreadPoolExecutor(max_workers=options.workers) as pool:
                 futures = {
-                    pool.submit(build_lead, o, places, fetcher, rules, health, options.max_pages): o
+                    pool.submit(build_lead, o, places, fetcher, rules, health, options.max_pages,
+                                email_checker=checker): o
                     for o in pending
                 }
                 not_done = set(futures)
@@ -207,8 +218,22 @@ def run_leads(options: RunOptions, stop: threading.Event | None = None,
                                 log.warning("%s: failed, will retry next run (%s)", org.company_name, exc)
                                 continue
 
+                            if health.require_email and (not lead.email or lead.email in used_emails):
+                                # Done either way: the lookup was paid for, and
+                                # a re-run would find the same website.
+                                writer.mark_done(org.key)
+                                if lead.email:
+                                    summary.shared_email += 1
+                                    why = f"{lead.email} already used for another lead"
+                                else:
+                                    summary.no_email += 1
+                                    why = "no working email found"
+                                log.info("%-36.36s left out: %s", org.company_name, why)
+                                continue
+
                             row = build_row(lead, rules)
                             writer.write(row)
+                            used_emails.add(lead.email)
                             _tally(summary, row, lead)
                             log.info("%-36.36s %-22.22s score=%-5s %s",
                                      org.company_name,
@@ -232,6 +257,15 @@ def run_leads(options: RunOptions, stop: threading.Event | None = None,
     sort_csv_by_score(options.out)
     summary.report(options.out)
     return summary.outcome()
+
+
+def emails_in(path: str) -> set[str]:
+    """Emails already in the output, so a later run doesn't list an inbox twice."""
+    try:
+        with open(path, newline="", encoding="utf-8") as handle:
+            return {row["email"] for row in csv.DictReader(handle) if row.get("email")}
+    except (OSError, KeyError):
+        return set()
 
 
 def _tally(summary: RunSummary, row: dict, lead) -> None:
@@ -266,6 +300,9 @@ def _preview(ranked, options, limit, rules, health, summary) -> int:
     next_run = min(limit, len(ranked)) if limit > 0 else len(ranked)
     log.info("preview only — no Google lookups made. The next real run would look up the "
              "top %d (about %d credits).", next_run, next_run)
+    if health.require_email:
+        log.info("the registry has no emails: a Run finds them on each website, and leaves out "
+                 "every organization without a working one")
     summary.report(out)
     return EXIT_OK
 

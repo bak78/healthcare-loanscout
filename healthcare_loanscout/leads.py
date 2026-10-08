@@ -16,6 +16,7 @@ from datetime import date
 from .config import Rules
 from .contacts import is_role_address
 from .crawl import SiteCrawl, crawl_site, is_crawlable
+from .emailcheck import FREE_MAIL, EmailChecker, domain_of
 from .fetch import PoliteFetcher
 from .npi import HealthRules, Organization
 from .places import Listing, PlacesClient
@@ -103,19 +104,38 @@ def email_belongs_to(email: str, first: str, last: str) -> bool:
     return len(first) >= 3 and local.startswith(first)
 
 
-def pick_email(crawl: SiteCrawl | None, org: Organization) -> tuple[str, str, bool]:
+def email_is_theirs(email: str, site_domain: str) -> bool:
+    """An address on the business's own domain, or a gmail-style mailbox it
+    lists on its own site — not a web designer's or a directory's."""
+    domain = domain_of(email)
+    if site_domain and (domain == site_domain or domain.endswith("." + site_domain)):
+        return True
+    return domain in FREE_MAIL
+
+
+def pick_email(crawl: SiteCrawl | None, org: Organization,
+               checker: EmailChecker | None = None) -> tuple[str, str, bool]:
     """(email, page it was on, whether it is the official's own address).
 
     The official's own mailbox beats the site's general best pick: it reaches
-    the decision maker instead of the front desk."""
+    the decision maker instead of the front desk. Only the business's own
+    addresses count, and, given a checker, only ones that pass it."""
     if crawl is None or not crawl.pages:
         return "", "", False
+
+    def usable(email: str) -> bool:
+        return email_is_theirs(email, crawl.domain) and (checker is None or checker.ok(email))
+
     for page in crawl.pages:
         for email in page.contacts.emails:
-            if email_belongs_to(email, org.official_first, org.official_last):
+            if email_belongs_to(email, org.official_first, org.official_last) and usable(email):
                 return email, page.url, True
     contacts = crawl.contacts
-    return contacts.email, contacts.email_page, False
+    for email in (contacts.email,) + contacts.other_emails:
+        if email and usable(email):
+            page = next((p.url for p in crawl.pages if email in p.contacts.emails), contacts.email_page)
+            return email, page, False
+    return "", "", False
 
 
 def build_lead(
@@ -126,6 +146,7 @@ def build_lead(
     health: HealthRules,
     max_pages: int,
     today: date | None = None,
+    email_checker: EmailChecker | None = None,
 ) -> Lead:
     """Look the organization up on Google, crawl its website, and score it.
 
@@ -144,7 +165,7 @@ def build_lead(
     if fetcher is not None and listing.website and is_crawlable(listing.website, rules):
         crawl = crawl_site(listing.website, fetcher, rules, max_pages)
 
-    email, email_page, is_official = pick_email(crawl, org)
+    email, email_page, is_official = pick_email(crawl, org, email_checker)
 
     hits = npi_hits(org, health, today) + google_hits(listing, health)
     if email:

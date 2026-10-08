@@ -167,7 +167,9 @@ def test_row_leads_with_the_requested_columns(rules, health):
 def workdir(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("SERPER_API_KEY", "test-key")
-    # The crawler is never reached: listings carry no website.
+    # The crawler is never reached: listings carry no website. Each
+    # organization's site gives it its own email, as a real Run would.
+    monkeypatch.setattr(leads, "pick_email", lambda crawl, o, checker=None: (f"office{o.npi}@gmail.com", "", False))
     return tmp_path
 
 
@@ -264,3 +266,32 @@ def test_stop_during_lookups_keeps_finished_rows(workdir):
     result = cli.run_leads(options, stop, npi_client=_client(20), places=SlowPlaces(listing(website="")))
     assert result == cli.EXIT_INTERRUPTED
     assert len(_rows(workdir / "out/leads.csv")) < 20
+
+
+# --- only leads with a working email ----------------------------------------------------------
+
+
+def test_organizations_without_a_working_email_are_left_out_and_not_looked_up_again(workdir, monkeypatch):
+    # Two organizations share an inbox; the third's website has no email.
+    def pick(crawl, o, checker=None):
+        return ("", "", False) if o.company_name.endswith("2") else ("office@gmail.com", "", False)
+    monkeypatch.setattr(leads, "pick_email", pick)
+    places = StubPlaces(listing(website=""))
+    options = cli.RunOptions(fields=("Home care",), zip_prefixes=("191",), limit=0,
+                             out="out/leads.csv", workers=1)
+    assert cli.run_leads(options, npi_client=_client(3), places=places) == cli.EXIT_OK
+    assert [r["email"] for r in _rows(workdir / "out/leads.csv")] == ["office@gmail.com"], \
+        "one had no email, one repeated an inbox already listed"
+    assert cli.run_leads(options, npi_client=_client(3), places=places) == cli.EXIT_DEPLETED
+    assert places.lookups == 3, "the ones left out aren't paid for twice"
+
+
+def test_a_website_email_on_someone_elses_domain_is_not_theirs(health):
+    crawl = crawl_of(("https://unityhh.com/", "<footer>Site by design@webshop.com</footer>"))
+    assert leads.pick_email(crawl, org(health)) == ("", "", False)
+
+
+def test_the_officials_own_address_is_picked_first(health):
+    crawl = crawl_of(("https://unityhh.com/contact", "<p>info@unityhh.com</p>"),
+                     ("https://unityhh.com/team", "<p>jobrien@unityhh.com</p>"))
+    assert leads.pick_email(crawl, org(health)) == ("jobrien@unityhh.com", "https://unityhh.com/team", True)

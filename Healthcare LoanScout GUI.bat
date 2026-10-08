@@ -8,6 +8,9 @@ if not exist ".venv\Scripts\pythonw.exe" (
     ".venv\Scripts\python.exe" -m pip install -q -r requirements.txt || goto :failed
 )
 
+rem A copy set up before a new package was added gets it now.
+".venv\Scripts\python.exe" -c "import dns.resolver" 2>nul || ".venv\Scripts\python.exe" -m pip install -q -r requirements.txt || goto :failed
+
 start "" ".venv\Scripts\pythonw.exe" -m healthcare_loanscout.gui
 exit /b 0
 

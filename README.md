@@ -84,6 +84,27 @@ All weights are in `config\healthcare.yaml` (registry and Google) and
 A preview scores registry facts only, so its scores are lower; the Run adds
 Google and the website on top.
 
+## Only leads with a working email
+
+Every row in `healthcare_leads.csv` has an email that passed these checks (set
+`require_email: false` in `config\healthcare.yaml` to turn this off):
+
+- it is on the business's own website and domain, or a gmail/yahoo-style
+  mailbox listed there — not a web designer's or a directory's;
+- it is a real address — not a placeholder (none@, test@) or no-reply box,
+  and not a misspelled domain (gmial.com);
+- its domain exists and accepts mail (DNS lists a mail server for it);
+- no other row already uses it.
+
+The registry has no emails, so this happens after the Google lookup: an
+organization whose website gives no working email still costs its credit, is
+left out, and isn't looked up again. The preview can't check emails yet, so
+it lists every organization.
+
+These checks can't tell whether one mailbox still exists (whether jsmith@ left
+the company). A paid verifier — NeverBounce, ZeroBounce — checks that for
+about a cent an address; worth it before a large send.
+
 ## Fields
 
 `config\healthcare.yaml` lists the fields and the NPI specialty names each
@@ -125,8 +146,8 @@ Registry searches are cached in `data\npi_cache` for 7 days.
   the registry. In a first test, 8 of 15 Philadelphia home care agencies and
   9 of 10 dental practices had a matching listing.
 - **Emails come only from websites**, so about half the home care agencies
-  have none. Some site emails are not ideal (a recruiting address, a sister
-  business's); check before mailing.
+  have none and are left out. Some site emails are not ideal (a recruiting
+  address, the front desk); check before mailing.
 - The authorized official is whoever signed the registration. Usually the
   owner, but check the `title` column.
 

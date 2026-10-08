@@ -15,6 +15,13 @@ zip_prefixes: ["191"]
 # Serper credit. The next run continues down the list.
 default_limit: 50
 
+# Leave out every organization without a working email. The registry has no
+# emails, so they come from each website during a Run; an address must belong
+# to the business (its own domain, or a gmail/yahoo-style mailbox on its own
+# site) and its domain must accept mail. Lookups that find none still cost a
+# credit, and aren't looked up again.
+require_email: true
+
 # Healthcare fields, in the order shown in the window's Field list.
 #   name        what the CSV's "field" column says
 #   taxonomies  NPI specialty names searched for this field. An organization

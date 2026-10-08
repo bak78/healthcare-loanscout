@@ -212,6 +212,15 @@ class CsvWriter:
                 self._seen_file.flush()
             self.seen.add(row["key"])
 
+    def mark_done(self, key: str) -> None:
+        """Record a lead as finished without writing a row — one left out for
+        having no working email — so later runs don't spend a credit on it again."""
+        with self._lock:
+            if self._seen_file is not None:
+                self._seen_file.write(f"{key}\n")
+                self._seen_file.flush()
+            self.seen.add(key)
+
     def already_done(self, key: str) -> bool:
         return key in self.seen
 
