@@ -85,6 +85,7 @@ def test_a_server_error_is_retried_next_run():
 
 
 class StubHunter:
+    name = "Hunter.io"
     def __init__(self, email="jobrien@unityhh.com"):
         self.email = email
         self.asked = []
@@ -96,7 +97,7 @@ class StubHunter:
 
 def _lead(rules, health, monkeypatch, site_html, hunter):
     monkeypatch.setattr(leads, "crawl_site", lambda *a, **k: crawl_of(("https://unityhh.com/", site_html)))
-    return leads.build_lead(org(health), StubPlaces(), object(), rules, health, 8, TODAY, hunter=hunter)
+    return leads.build_lead(org(health), StubPlaces(), object(), rules, health, 8, TODAY, email_finder=hunter)
 
 
 def test_hunter_fills_in_when_the_website_has_no_email(rules, health, monkeypatch):
@@ -115,10 +116,10 @@ def test_hunter_is_not_asked_when_the_website_has_an_email(rules, health, monkey
 
 def test_set_to_always_hunter_replaces_a_front_desk_address(rules, health, monkeypatch):
     import dataclasses
-    always = dataclasses.replace(health, hunter_when="always")
+    always = dataclasses.replace(health, email_finder_when="always")
     hunter = StubHunter()
     monkeypatch.setattr(leads, "crawl_site", lambda *a, **k: crawl_of(("https://unityhh.com/", "<p>info@unityhh.com</p>")))
-    lead = leads.build_lead(org(always), StubPlaces(), object(), rules, always, 8, TODAY, hunter=hunter)
+    lead = leads.build_lead(org(always), StubPlaces(), object(), rules, always, 8, TODAY, email_finder=hunter)
     assert lead.email == "jobrien@unityhh.com"
 
 
@@ -129,7 +130,7 @@ def test_a_hunter_address_on_another_domain_is_not_used(rules, health, monkeypat
 
 def test_hunter_is_not_asked_without_a_website(rules, health):
     hunter = StubHunter()
-    leads.build_lead(org(health), StubPlaces(listing(website="")), None, rules, health, 8, TODAY, hunter=hunter)
+    leads.build_lead(org(health), StubPlaces(listing(website="")), None, rules, health, 8, TODAY, email_finder=hunter)
     assert hunter.asked == []
 
 
@@ -141,6 +142,7 @@ def test_a_run_stops_when_hunter_runs_out_and_keeps_finished_rows(workdir, monke
     monkeypatch.setattr(leads, "crawl_site", lambda *a, **k: crawl_of(("https://unityhh.com/", "<p>Hi</p>")))
 
     class OutHunter:
+        name = "Hunter.io"
         lookups, found = 1, 0
 
         def find(self, *args):
@@ -150,5 +152,5 @@ def test_a_run_stops_when_hunter_runs_out_and_keeps_finished_rows(workdir, monke
             pass
 
     options = cli.RunOptions(fields=("Home care",), zip_prefixes=("191",), limit=0, out="out/leads.csv", workers=1)
-    result = cli.run_leads(options, npi_client=_client(3), places=StubPlaces(), hunter=OutHunter())
+    result = cli.run_leads(options, npi_client=_client(3), places=StubPlaces(), email_finder=OutHunter())
     assert result == cli.EXIT_SERPER_UNAVAILABLE

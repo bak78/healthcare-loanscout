@@ -105,22 +105,24 @@ These checks can't tell whether one mailbox still exists (whether jsmith@ left
 the company). A paid verifier — NeverBounce, ZeroBounce — checks that for
 about a cent an address; worth it before a large send.
 
-## Hunter.io (optional)
+## Email finder: Anymailfinder or Hunter.io (optional)
 
-With `HUNTER_API_KEY` in `.env`, a Run asks Hunter for the official's own
-email whenever the website shows none: Hunter takes the official's name (from
-the registry) and the website's domain (from Google) and returns the likely
-address. Only addresses Hunter has **verified** are kept; "accept all" and
-"unknown" ones are logged and left out. The CSV's `email_source` column says
-"Hunter.io (verified…)" for these.
+With `ANYMAILFINDER_API_KEY` (or `HUNTER_API_KEY`) in `.env`, a Run asks the
+email finder for the official's own email whenever the website shows none: it
+takes the official's name (from the registry) and the website's domain (from
+Google) and returns the likely address. Only **verified** addresses are kept;
+"risky", "accept all" and "unknown" ones are logged and left out. The CSV's
+`email_source` column says "Anymailfinder (verified)" for these. When both
+keys are set, Anymailfinder is used.
 
-Hunter charges a credit for each address it returns, verified or not, and
-nothing for a search that finds nothing. The free plan has 50 a month. Set
-`hunter_when: always` in `config\healthcare.yaml` to also replace front-desk
-addresses (info@) with the official's own — more credits, better contacts.
+Anymailfinder charges a credit only for each verified email it finds; a miss
+is free, and so is repeating a search within 30 days. (Hunter charges for each
+address it returns, verified or not.) Set `email_finder_when: always` in
+`config\healthcare.yaml` to also replace front-desk addresses (info@) with
+the official's own — more credits, better contacts.
 
-Hunter needs a website. An organization with no Google listing, or a listing
-without a website, can't get an email from Hunter or any similar service.
+An email finder needs a website. An organization with no Google listing, or a
+listing without a website, can't get an email from any such service.
 
 ## Fields
 

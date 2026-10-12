@@ -24,7 +24,9 @@ from .crawl import DEFAULT_MAX_PAGES
 from .emailcheck import EmailChecker
 from .export import CsvWriter, build_row, sort_csv_by_score
 from .fetch import PoliteFetcher
-from .hunter import HunterClient, HunterUnavailable
+from .anymailfinder import AnymailfinderClient
+from .emailfinder import EmailFinderUnavailable
+from .hunter import HunterClient
 from .leads import build_lead
 from .npi import (NpiClient, NpiUnavailable, SearchStopped, check_zip_prefixes,
                   find_organizations, load_health_rules)
@@ -37,7 +39,7 @@ EXIT_NO_MATCHES = 1  # the registry has no lead organizations for this area and 
 EXIT_CONFIG_ERROR = 2  # missing key, bad settings, registry unreachable
 EXIT_DEPLETED = 3  # every matching organization already processed
 EXIT_LOOKUPS_FAILED = 4  # organizations were attempted and none could be looked up
-EXIT_SERPER_UNAVAILABLE = 5  # Serper or Hunter: bad key or out of credits; the run stopped early
+EXIT_SERPER_UNAVAILABLE = 5  # Serper or the email finder: bad key or out of credits; the run stopped early
 EXIT_INTERRUPTED = 130
 
 DEFAULT_OUT = "out/healthcare_leads.csv"
@@ -77,8 +79,9 @@ class RunSummary:
     with_website: int = 0
     not_found: int = 0
     credits_used: int = 0
-    hunter_lookups: int = 0
-    hunter_found: int = 0
+    finder_name: str = ""
+    finder_lookups: int = 0
+    finder_found: int = 0
     serper_unavailable: bool = False
 
     def outcome(self) -> int:
@@ -113,9 +116,9 @@ class RunSummary:
         if self.not_found:
             log.info("%-32s %d", "  no Google listing (closed?)", self.not_found)
         log.info("%-32s %d", "Serper credits used", self.credits_used)
-        if self.hunter_lookups:
-            log.info("%-32s %d  (%d verified emails found)", "Hunter searches", self.hunter_lookups,
-                     self.hunter_found)
+        if self.finder_lookups:
+            log.info("%-32s %d  (%d verified emails found)", f"{self.finder_name} searches",
+                     self.finder_lookups, self.finder_found)
         log.info("%-32s %d  ->  %s", "rows written", self.written, out_path)
         log.info(line)
 
@@ -125,9 +128,9 @@ def preview_path(out: str) -> str:
 
 
 def run_leads(options: RunOptions, stop: threading.Event | None = None,
-              npi_client: NpiClient | None = None, places=None, hunter=None) -> int:
-    """npi_client, places and hunter can be passed in (tests); otherwise real
-    ones are made — Hunter only when HUNTER_API_KEY is set."""
+              npi_client: NpiClient | None = None, places=None, email_finder=None) -> int:
+    """npi_client, places and email_finder can be passed in (tests); otherwise
+    real ones are made — the email finder only when its key is in .env."""
     stop = stop or threading.Event()
     try:
         settings = load_settings()
@@ -182,11 +185,11 @@ def run_leads(options: RunOptions, stop: threading.Event | None = None,
     fetcher = PoliteFetcher(settings.user_agent, default_delay=options.delay)
     checker = EmailChecker()
     used_emails = set() if options.no_resume else emails_in(options.out)
-    if hunter is None and settings.hunter_api_key:
-        hunter = HunterClient(settings.hunter_api_key)
-    if hunter is not None:
-        log.info("Hunter.io is on: it looks for the official's email when the website shows %s",
-                 "none" if health.hunter_when == "missing" else "none, or only a front-desk address")
+    if email_finder is None:
+        email_finder = make_email_finder(settings)
+    if email_finder is not None:
+        log.info("%s is on: it looks for the official's email when the website shows %s", email_finder.name,
+                 "none" if health.email_finder_when == "missing" else "none, or only a front-desk address")
 
     try:
         with CsvWriter(options.out, resume=not options.no_resume) as writer:
@@ -206,7 +209,7 @@ def run_leads(options: RunOptions, stop: threading.Event | None = None,
             with ThreadPoolExecutor(max_workers=options.workers) as pool:
                 futures = {
                     pool.submit(build_lead, o, places, fetcher, rules, health, options.max_pages,
-                                email_checker=checker, hunter=hunter): o
+                                email_checker=checker, email_finder=email_finder): o
                     for o in pending
                 }
                 not_done = set(futures)
@@ -221,7 +224,7 @@ def run_leads(options: RunOptions, stop: threading.Event | None = None,
                             summary.attempted += 1
                             try:
                                 lead = future.result()
-                            except (SerperUnavailable, HunterUnavailable) as exc:
+                            except (SerperUnavailable, EmailFinderUnavailable) as exc:
                                 log.error("%s — stopping; finished rows are saved", exc)
                                 summary.serper_unavailable = True
                                 raise
@@ -239,7 +242,7 @@ def run_leads(options: RunOptions, stop: threading.Event | None = None,
                                     why = f"{lead.email} already used for another lead"
                                 else:
                                     summary.no_email += 1
-                                    why = "no working email: " + _why_no_email(lead, hunter is not None)
+                                    why = "no working email: " + _why_no_email(lead, email_finder)
                                 log.info("%-36.36s left out: %s", org.company_name, why)
                                 continue
 
@@ -251,7 +254,7 @@ def run_leads(options: RunOptions, stop: threading.Event | None = None,
                                      org.company_name,
                                      f"{row['first_name']} {row['last_name']}".strip() or "-",
                                      row["score"], row["email"] or row["phone"] or "-")
-                except (KeyboardInterrupt, SerperUnavailable, HunterUnavailable):
+                except (KeyboardInterrupt, SerperUnavailable, EmailFinderUnavailable):
                     fetcher.stop()
                     pool.shutdown(wait=False, cancel_futures=True)
                     raise
@@ -259,23 +262,33 @@ def run_leads(options: RunOptions, stop: threading.Event | None = None,
         log.warning("stopped — %d rows already written to %s (run again to continue)",
                     summary.written, options.out)
         return EXIT_INTERRUPTED
-    except (SerperUnavailable, HunterUnavailable):
+    except (SerperUnavailable, EmailFinderUnavailable):
         pass
     finally:
         summary.credits_used = getattr(places, "lookups", 0)
-        summary.hunter_lookups = getattr(hunter, "lookups", 0)
-        summary.hunter_found = getattr(hunter, "found", 0)
+        summary.finder_name = getattr(email_finder, "name", "")
+        summary.finder_lookups = getattr(email_finder, "lookups", 0)
+        summary.finder_found = getattr(email_finder, "found", 0)
         fetcher.close()
         places.close()
-        if hunter is not None:
-            hunter.close()
+        if email_finder is not None:
+            email_finder.close()
 
     sort_csv_by_score(options.out)
     summary.report(options.out)
     return summary.outcome()
 
 
-def _why_no_email(lead, hunter_on: bool) -> str:
+def make_email_finder(settings):
+    """Anymailfinder when its key is in .env, else Hunter.io, else none."""
+    if settings.anymailfinder_api_key:
+        return AnymailfinderClient(settings.anymailfinder_api_key)
+    if settings.hunter_api_key:
+        return HunterClient(settings.hunter_api_key)
+    return None
+
+
+def _why_no_email(lead, email_finder) -> str:
     if not lead.listing.matched_on:
         return "no Google listing"
     if not lead.listing.website:
@@ -284,7 +297,7 @@ def _why_no_email(lead, hunter_on: bool) -> str:
         return "website is a social media or directory page"
     if not lead.crawl.pages:
         return "website didn't load"
-    return "none on the website" + (", none verified by Hunter" if hunter_on else "")
+    return "none on the website" + (f", none verified by {email_finder.name}" if email_finder else "")
 
 
 def emails_in(path: str) -> set[str]:

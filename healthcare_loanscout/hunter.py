@@ -13,9 +13,10 @@ https://hunter.io/api-documentation/v2#email-finder
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 
 import requests
+
+from .emailfinder import EmailFinderUnavailable, FinderResult
 
 log = logging.getLogger("healthcare_loanscout")
 
@@ -23,22 +24,20 @@ HUNTER_URL = "https://api.hunter.io/v2"
 TIMEOUT = 20
 
 
-class HunterUnavailable(RuntimeError):
+class HunterUnavailable(EmailFinderUnavailable):
     """Hunter can't be used at all (bad key, out of searches); stop the run."""
 
 
-@dataclass(frozen=True)
-class HunterResult:
-    email: str = ""  # '' unless Hunter verified the mailbox
-    status: str = ""  # Hunter's verification status: valid, accept_all, unknown, invalid
-    score: int = 0  # Hunter's confidence, 0-100
-    position: str = ""  # job title Hunter has for the person, when it has one
+# Hunter's verification statuses: valid, accept_all, unknown, invalid.
+HunterResult = FinderResult
 
 
 class HunterClient:
     """Hunter's Email Finder. A search costs one Hunter credit when it returns
     an address, verified or not; one that finds nothing is free (measured
     October 2026: 16 searches, 5 credits)."""
+
+    name = "Hunter.io"
 
     def __init__(self, api_key: str, session=None):
         self._key = api_key

@@ -168,6 +168,7 @@ def workdir(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("SERPER_API_KEY", "test-key")
     monkeypatch.setenv("HUNTER_API_KEY", "")  # never spend real Hunter credits in tests
+    monkeypatch.setenv("ANYMAILFINDER_API_KEY", "")  # nor Anymailfinder credits
     # The crawler is never reached: listings carry no website. Each
     # organization's site gives it its own email, as a real Run would.
     monkeypatch.setattr(leads, "pick_email", lambda crawl, o, checker=None: (f"office{o.npi}@gmail.com", "", False))

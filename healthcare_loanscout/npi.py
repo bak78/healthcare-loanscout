@@ -85,7 +85,7 @@ class HealthRules:
     title_levels: tuple[tuple[str, tuple[str, ...]], ...]
     weights: dict = field(default_factory=dict)
     require_email: bool = True
-    hunter_when: str = "missing"
+    email_finder_when: str = "missing"
 
     @property
     def field_names(self) -> tuple[str, ...]:
@@ -173,14 +173,14 @@ def load_health_rules(path: Path | str = DEFAULT_HEALTHCARE_PATH) -> HealthRules
         ),
         weights=dict(raw.get("weights") or {}),
         require_email=bool(raw.get("require_email", True)),
-        hunter_when=_hunter_when(raw.get("hunter_when", "missing")),
+        email_finder_when=_email_finder_when(raw.get("email_finder_when", raw.get("hunter_when", "missing"))),
     )
 
 
-def _hunter_when(value) -> str:
+def _email_finder_when(value) -> str:
     value = str(value).strip().lower()
     if value not in ("missing", "always"):
-        raise ConfigError(f"healthcare.yaml hunter_when must be 'missing' or 'always', got {value!r}")
+        raise ConfigError(f"healthcare.yaml email_finder_when must be 'missing' or 'always', got {value!r}")
     return value
 
 
