@@ -86,6 +86,8 @@ class HealthRules:
     weights: dict = field(default_factory=dict)
     require_email: bool = True
     email_finder_when: str = "missing"
+    chain_min_companies: int = 3
+    franchise_domains: tuple[str, ...] = ()
 
     @property
     def field_names(self) -> tuple[str, ...]:
@@ -174,6 +176,8 @@ def load_health_rules(path: Path | str = DEFAULT_HEALTHCARE_PATH) -> HealthRules
         weights=dict(raw.get("weights") or {}),
         require_email=bool(raw.get("require_email", True)),
         email_finder_when=_email_finder_when(raw.get("email_finder_when", raw.get("hunter_when", "missing"))),
+        chain_min_companies=int(raw.get("chain_min_companies", 3)),
+        franchise_domains=tuple(str(d).strip().lower() for d in raw.get("franchise_domains") or []),
     )
 
 

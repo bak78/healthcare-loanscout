@@ -32,6 +32,24 @@ require_email: true
 #            (info@, office@), to reach the official directly
 email_finder_when: missing
 
+# Chains and health systems. Each practice of a health system registers its
+# own NPI, so the registry can't tell "Garcia Podiatry" belongs to
+# ChristianaCare. Their shared website or email domain does: at the end of
+# every run, a domain shared by this many different organizations in the
+# results moves them to <results>_left_out.csv. 0 turns this off.
+chain_min_companies: 3
+
+# Franchise brands: each office is independently owned — a small business —
+# though all share the brand's domain. Never treated as a chain. Add any
+# other brand (or group) whose members should stay leads.
+franchise_domains: [
+  visitingangels.com, synergyhomecare.com, amadaseniorcare.com, comfortkeepers.com,
+  homeinstead.com, rightathome.net, brightstarcare.com, seniorhelpers.com, griswoldcare.com,
+  homewatchcaregivers.com, firstlighthomecare.com, alwaysbestcare.com, assistinghands.com,
+  homehelpershomecare.com, interimhealthcare.com, nursenextdoor.com, caringseniorservice.com,
+  thejoint.com, 100percentchiropractic.com,
+]
+
 # Healthcare fields, in the order shown in the window's Field list.
 #   name        what the CSV's "field" column says
 #   taxonomies  NPI specialty names searched for this field. An organization

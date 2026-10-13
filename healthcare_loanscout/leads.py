@@ -169,12 +169,18 @@ def build_lead(
 
     email, email_page, is_official = pick_email(crawl, org, email_checker)
 
+    # The website's own signals. One that disqualifies the organization
+    # (a nonprofit, a lender, a public company…) means no paid email search.
+    site_hits = match_site(crawl.pages, rules) if crawl is not None and crawl.pages else []
+    disqualified = any(h.category == "disqualify" for h in site_hits)
+
     # The website gave no email (or, set to "always", only a front-desk one):
     # ask the email finder (Anymailfinder or Hunter) for the official's own
     # address at the website's domain.
     wanted = not email or (health.email_finder_when == "always" and not is_official)
     domain = registered_domain(listing.website) if is_crawlable(listing.website or "", rules) else ""
-    if email_finder is not None and wanted and domain and org.official_first and org.official_last:
+    if (email_finder is not None and wanted and not disqualified and domain
+            and org.official_first and org.official_last):
         found = email_finder.find(domain, org.official_first, org.official_last)
         if found.email and email_is_theirs(found.email, domain) and (
                 email_checker is None or email_checker.ok(found.email)):
@@ -188,7 +194,6 @@ def build_lead(
         if is_official:
             hits.append(_hit("email_is_official", w.get("email_matches_official", 4),
                              f"{email} carries the official's name", email_page))
-    if crawl is not None and crawl.pages:
-        hits += match_site(crawl.pages, rules)
+    hits += site_hits
 
     return Lead(org, listing, crawl, score_site(hits, rules), email, email_page, is_official)

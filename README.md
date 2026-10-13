@@ -133,6 +133,23 @@ primary & urgent care, pharmacy, medical equipment, medical transport, labs,
 surgery centers. Hospitals, government bodies, universities and sub-units of
 larger organizations are left out.
 
+## Who else is left out
+
+- **Disqualified organizations** — nonprofits, lenders, public and very large
+  companies, found on their websites during a Run. They go to
+  `out\healthcare_leads_left_out.csv` with the reason, not the results, and
+  no email-finder credit is spent on them.
+- **Health systems and chains** — each practice of a health system registers
+  its own NPI, so the registry can't tell "Garcia Podiatry" belongs to
+  ChristianaCare. At the end of every Run, a website or email domain shared by
+  3 or more different organizations in the results moves them to the
+  left-out file. Email providers, website builders, government sites and the
+  franchise brands in `franchise_domains` in `config\healthcare.yaml` never
+  count — a Visiting Angels office is an independently owned small business.
+  `chain_min_companies: 0` turns this off.
+
+Anything in the left-out file can be copied back into the results by hand.
+
 ## Command line
 
 ```powershell

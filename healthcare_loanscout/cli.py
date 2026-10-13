@@ -20,9 +20,10 @@ from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 
 from .config import ConfigError, load_settings
+from .cleanup import LeftOutWriter, leave_out_chains, left_out_path, never_a_chain
 from .crawl import DEFAULT_MAX_PAGES
 from .emailcheck import EmailChecker
-from .export import CsvWriter, build_row, sort_csv_by_score
+from .export import COLUMNS, CsvWriter, build_row, sort_csv_by_score
 from .fetch import PoliteFetcher
 from .anymailfinder import AnymailfinderClient
 from .emailfinder import EmailFinderUnavailable
@@ -71,6 +72,8 @@ class RunSummary:
     written: int = 0
     no_email: int = 0
     shared_email: int = 0
+    disqualified: int = 0
+    chains: int = 0
     retry_later: int = 0
     with_name: int = 0
     with_owner: int = 0
@@ -108,6 +111,10 @@ class RunSummary:
             log.info("%-32s %d", "  left out: no working email", self.no_email)
         if self.shared_email:
             log.info("%-32s %d", "  left out: email already used", self.shared_email)
+        if self.disqualified:
+            log.info("%-32s %d", "  left out: disqualified", self.disqualified)
+        if self.chains:
+            log.info("%-32s %d", "moved out: chains or groups", self.chains)
         log.info("%-32s %d", "  with a first and last name", self.with_name)
         log.info("%-32s %d", "    who is the owner/president", self.with_owner)
         log.info("%-32s %d", "  with a phone number", self.with_phone)
@@ -120,6 +127,8 @@ class RunSummary:
             log.info("%-32s %d  (%d verified emails found)", f"{self.finder_name} searches",
                      self.finder_lookups, self.finder_found)
         log.info("%-32s %d  ->  %s", "rows written", self.written, out_path)
+        if self.disqualified or self.chains:
+            log.info("%-32s %s", "left-out rows (with reasons)", left_out_path(out_path))
         log.info(line)
 
 
@@ -191,6 +200,7 @@ def run_leads(options: RunOptions, stop: threading.Event | None = None,
         log.info("%s is on: it looks for the official's email when the website shows %s", email_finder.name,
                  "none" if health.email_finder_when == "missing" else "none, or only a front-desk address")
 
+    left_out = LeftOutWriter(options.out, COLUMNS)
     try:
         with CsvWriter(options.out, resume=not options.no_resume) as writer:
             pending = [o for o in ranked if not writer.already_done(o.key)]
@@ -231,6 +241,15 @@ def run_leads(options: RunOptions, stop: threading.Event | None = None,
                             except Exception as exc:  # one bad organization must not kill the run
                                 summary.retry_later += 1
                                 log.warning("%s: failed, will retry next run (%s)", org.company_name, exc)
+                                continue
+
+                            if lead.score.disqualified:
+                                # Not a small-business borrower: kept for review, not as a lead.
+                                writer.mark_done(org.key)
+                                left_out.write(build_row(lead, rules), f"disqualified: {lead.score.disqualify_reason}")
+                                summary.disqualified += 1
+                                log.info("%-36.36s left out: disqualified (%s)", org.company_name,
+                                         lead.score.disqualify_reason)
                                 continue
 
                             if health.require_email and (not lead.email or lead.email in used_emails):
@@ -274,9 +293,20 @@ def run_leads(options: RunOptions, stop: threading.Event | None = None,
         if email_finder is not None:
             email_finder.close()
 
+    summary.chains = _leave_out_chains(options.out, health, rules)
     sort_csv_by_score(options.out)
     summary.report(options.out)
     return summary.outcome()
+
+
+def _leave_out_chains(out: str, health, rules) -> int:
+    """Move health systems' and chains' rows out of the results; how many moved."""
+    moved = leave_out_chains(out, COLUMNS, health.chain_min_companies,
+                             never_a_chain(health.franchise_domains, rules.domain_blocklist))
+    for domain, count in sorted(moved.items(), key=lambda x: -x[1]):
+        log.info("left out %d rows sharing %s (a chain or health system; add it to franchise_domains "
+                 "in healthcare.yaml to keep them)", count, domain)
+    return sum(moved.values())
 
 
 def make_email_finder(settings):
