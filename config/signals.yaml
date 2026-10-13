@@ -379,33 +379,25 @@ signals:
   # scored as a prospect wastes a call and discredits the whole list. These
   # patterns therefore lean broad, and cover the retail-banking vocabulary that
   # actually appears on such sites, not just lending language.
+  # Only wording a lender uses about itself. Everyday mentions of banking
+  # disqualified 38 real leads in October 2026, none of them lenders: "Health
+  # Savings Account" in job benefits, a board member's credit union, "open an
+  # account" with a supplier, "the SBA loan was soon repaid" in a company's
+  # history. Leads come from the NPI registry and US DOT, so a real lender is
+  # rare; when one appears, its site carries the regulators' notices below.
   - id: is_lender
     category: disqualify
     weight: 100
     patterns:
-      - "business loans"
-      - "we lend"
-      - "apply for a loan"
-      - "merchant cash advance"
-      - "equipment financing for"
-      - "sba (?:loan|lender)"
       - "member fdic"
       - "equal housing lender"
-      - "credit union"
-      - "mortgage (?:broker|lender|rates)"
-      - "we are a (?:bank|lender)"
-      - "checking account"
-      - "savings account"
-      - "personal banking"
-      - "business banking"
-      - "online banking"
-      - "mobile banking"
-      - "open an account"
-      - "certificate of deposit"
-      - "nmls"
+      - "(?:federally )?insured by (?:the )?ncua"
+      - "nmls\\s*(?:#|id|no\\.?|number)?\\s*[:#]?\\s*\\d"
+      - "we are an? (?:bank|lender|direct lender|credit union|mortgage lender)"
+      - "(?:we|our bank) offers? (?:small )?business loans"
+      - "we lend (?:money|to (?:small )?businesses)"
+      - "merchant cash advances?"
       - "annual percentage yield"
-      - "wealth management"
-      - "brokerage account"
 
   - id: nonprofit
     category: disqualify

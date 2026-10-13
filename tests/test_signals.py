@@ -80,3 +80,28 @@ def test_site_hits_are_sorted_by_weight_descending(page_factory, rules):
 def test_disqualifier_fires_on_lender(page_factory, rules):
     hits = match_page(page_factory("bank_disqualify.html"), rules)
     assert "is_lender" in ids(hits)
+
+
+def test_everyday_banking_words_are_not_a_lender(rules):
+    """Each of these disqualified a real lead in October 2026."""
+    from healthcare_loanscout.extract import build_page
+    texts = [
+        "Benefits: Medical, Dental, Vision, 401K, HSA (Health Savings Account), Paid Holidays",
+        "Board of Directors: Fred Reinhardt, Greenwood Credit Union; Carolyn Souza, Looking Upwards",
+        "1. Open an Account or Pay Cash. Submit a credit account application",
+        "Keith worked as Senior Vice President and Business Banking Team Leader of Berkshire Bank",
+        "Revenues are in the $20 million range and still growing. The SBA loan was soon repaid.",
+        "We lend a helping hand to families in need.",
+    ]
+    for text in texts:
+        page = build_page("https://example.com/about", f"<html><body><p>{text}</p></body></html>")
+        hit_ids = {h.signal_id for h in match_site([page], rules)}
+        assert "is_lender" not in hit_ids, text
+
+
+def test_a_lenders_own_notices_still_disqualify(rules):
+    from healthcare_loanscout.extract import build_page
+    for text in ["Member FDIC. Equal Housing Lender.", "Federally insured by NCUA", "NMLS ID: 401234",
+                 "We are a direct lender serving small businesses", "We offer small business loans"]:
+        page = build_page("https://bank.example/", f"<html><body><p>{text}</p></body></html>")
+        assert "is_lender" in {h.signal_id for h in match_site([page], rules)}, text
