@@ -199,8 +199,12 @@ class CsvWriter:
             self._writer.writeheader()
             self._file.flush()
 
+        # The seen-list is only ever added to, unless the run starts over
+        # (no_resume). It must not follow the results file: a new results
+        # file (the old one deleted to start a fresh batch) would wipe the
+        # memory of every company already done, and later runs would repeat them.
         self._seen_file = (
-            self.seen_path.open(mode, encoding="utf-8") if track_seen else None
+            self.seen_path.open("a" if resume else "w", encoding="utf-8") if track_seen else None
         )
 
     def write(self, row: dict) -> None:
