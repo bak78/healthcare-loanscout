@@ -1,4 +1,4 @@
-"""What every email finder (Anymailfinder, Hunter.io) gives back.
+"""What an email finder (Anymailfinder) gives back.
 
 An email finder takes a person's first and last name and their company's
 domain and returns the most likely address, and whether the service could
@@ -24,6 +24,6 @@ class FinderResult:
 
 
 def describe(finder, result: FinderResult) -> str:
-    """'Anymailfinder (verified)' or 'Hunter.io (verified, confidence 97)'."""
+    """'Anymailfinder (verified)', with the service's confidence when it gives one."""
     confidence = f", confidence {result.score}" if result.score else ""
     return f"{finder.name} (verified{confidence})"

@@ -6,7 +6,6 @@ import pytest
 from healthcare_loanscout import cli
 from healthcare_loanscout.anymailfinder import AnymailfinderClient, AnymailfinderUnavailable
 from healthcare_loanscout.emailfinder import EmailFinderUnavailable, FinderResult, describe
-from healthcare_loanscout.hunter import HunterClient
 
 
 class FakeResponse:
@@ -79,15 +78,13 @@ def test_a_server_error_is_retried_next_run():
 def test_the_source_names_the_service():
     assert describe(AnymailfinderClient("key", FakeSession()), FinderResult("a@b.com", "valid")) == \
         "Anymailfinder (verified)"
-    assert describe(HunterClient("key"), FinderResult("a@b.com", "valid", 97)) == "Hunter.io (verified, confidence 97)"
 
 
 class Keys:
-    def __init__(self, anymailfinder=None, hunter=None):
-        self.anymailfinder_api_key, self.hunter_api_key = anymailfinder, hunter
+    def __init__(self, anymailfinder=None):
+        self.anymailfinder_api_key = anymailfinder
 
 
-def test_anymailfinder_is_preferred_then_hunter_then_none():
-    assert isinstance(cli.make_email_finder(Keys("a", "h")), AnymailfinderClient)
-    assert isinstance(cli.make_email_finder(Keys(hunter="h")), HunterClient)
+def test_anymailfinder_is_used_when_its_key_is_set():
+    assert isinstance(cli.make_email_finder(Keys("a")), AnymailfinderClient)
     assert cli.make_email_finder(Keys()) is None

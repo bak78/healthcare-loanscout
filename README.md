@@ -105,19 +105,17 @@ These checks can't tell whether one mailbox still exists (whether jsmith@ left
 the company). A paid verifier — NeverBounce, ZeroBounce — checks that for
 about a cent an address; worth it before a large send.
 
-## Email finder: Anymailfinder or Hunter.io (optional)
+## Email finder: Anymailfinder (optional)
 
-With `ANYMAILFINDER_API_KEY` (or `HUNTER_API_KEY`) in `.env`, a Run asks the
-email finder for the official's own email whenever the website shows none: it
-takes the official's name (from the registry) and the website's domain (from
-Google) and returns the likely address. Only **verified** addresses are kept;
-"risky", "accept all" and "unknown" ones are logged and left out. The CSV's
-`email_source` column says "Anymailfinder (verified)" for these. When both
-keys are set, Anymailfinder is used.
+With `ANYMAILFINDER_API_KEY` in `.env`, a Run asks Anymailfinder for the
+official's own email whenever the website shows none: it takes the official's
+name (from the registry) and the website's domain (from Google) and returns
+the likely address. Only **verified** addresses are kept; "risky" and "not
+found" ones are logged and left out. The CSV's `email_source` column says
+"Anymailfinder (verified)" for these.
 
 Anymailfinder charges a credit only for each verified email it finds; a miss
-is free, and so is repeating a search within 30 days. (Hunter charges for each
-address it returns, verified or not.) Set `email_finder_when: always` in
+is free, and so is repeating a search within 30 days. Set `email_finder_when: always` in
 `config\healthcare.yaml` to also replace front-desk addresses (info@) with
 the official's own — more credits, better contacts.
 

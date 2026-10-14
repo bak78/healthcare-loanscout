@@ -22,11 +22,10 @@ default_limit: 50
 # credit, and aren't looked up again.
 require_email: true
 
-# Email finder (optional): Anymailfinder (ANYMAILFINDER_API_KEY in .env) or
-# Hunter.io (HUNTER_API_KEY); Anymailfinder is used when both are set. Given
+# Email finder (optional): Anymailfinder (ANYMAILFINDER_API_KEY in .env). Given
 # the official's name and the website's domain, it finds their email; only
 # verified addresses are kept. Anymailfinder charges a credit per verified
-# email found; Hunter per address returned.
+# email found.
 #   missing  ask only when the website shows no working email
 #   always   also ask when the website shows only a front-desk address
 #            (info@, office@), to reach the official directly

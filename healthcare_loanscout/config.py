@@ -69,7 +69,6 @@ class Settings:
     rules: Rules
     serper_api_key: str | None
     contact_email: str
-    hunter_api_key: str | None = None
     anymailfinder_api_key: str | None = None
 
     @property
@@ -179,6 +178,5 @@ def load_settings(signals_path: Path | str = DEFAULT_SIGNALS_PATH) -> Settings:
         rules=load_rules(signals_path),
         serper_api_key=os.environ.get("SERPER_API_KEY") or None,
         contact_email=os.environ.get("CRAWLER_CONTACT_EMAIL", "unknown@example.com"),
-        hunter_api_key=os.environ.get("HUNTER_API_KEY") or None,
         anymailfinder_api_key=os.environ.get("ANYMAILFINDER_API_KEY") or None,
     )

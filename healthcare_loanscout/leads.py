@@ -175,7 +175,7 @@ def build_lead(
     disqualified = any(h.category == "disqualify" for h in site_hits)
 
     # The website gave no email (or, set to "always", only a front-desk one):
-    # ask the email finder (Anymailfinder or Hunter) for the official's own
+    # ask the email finder (Anymailfinder) for the official's own
     # address at the website's domain.
     wanted = not email or (health.email_finder_when == "always" and not is_official)
     domain = registered_domain(listing.website) if is_crawlable(listing.website or "", rules) else ""
