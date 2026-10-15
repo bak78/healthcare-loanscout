@@ -74,7 +74,7 @@ class CountingFinder:
     def __init__(self):
         self.asked = []
 
-    def find(self, *args):
+    def find(self, *args, **kwargs):
         self.asked.append(args)
         return FinderResult()
 

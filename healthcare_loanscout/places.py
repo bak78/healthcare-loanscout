@@ -6,6 +6,11 @@ Search results are only trusted when they are provably the same business: the
 listing's street address must match the NPI practice address, or failing that,
 its name must match and it must sit in the same ZIP code. Anything less is
 left blank, because calling the wrong business is worse than calling none.
+
+An address alone isn't proof: an office building or a shopping strip holds
+many businesses, and Google may return a neighbour. So an address match also
+needs the listing's name to share a word with the business's (or its
+official's) name, or its phone to be one the registry lists for it.
 """
 
 from __future__ import annotations
@@ -46,7 +51,7 @@ class Listing:
     address: str = ""
     phone: str = ""
     website: str = ""
-    matched_on: str = ""  # "address", "name + zip", or "" for no match
+    matched_on: str = ""  # "address", "address + phone", "name + zip", or "" for no match
     note: str = ""
     rating: float = 0.0  # Google star rating, 0 when none
     reviews: int = 0  # number of Google ratings
@@ -100,22 +105,91 @@ def _name_overlap(a: str, b: str) -> float:
     return len(left & right) / len(left)
 
 
-def match_listing(places: list[dict], search_name: str, address: str, zip5: str) -> Listing:
-    """Pick the listing that is provably this business, or none."""
+# Words that only say what kind of company it is, left out when names are
+# compared run together.
+_LEGAL_WORDS = {
+    "llc", "inc", "incorporated", "corp", "corporation", "co", "company", "companies", "ltd",
+    "lp", "pc", "pllc", "pa", "the", "and", "of",
+}
+
+
+def _compact(name: str) -> str:
+    """'E J Paving Co Inc' -> 'ejpaving'; "PJ's Roofing" -> 'pjsroofing'."""
+    return "".join(w for w in _words(name) if w not in _LEGAL_WORDS)
+
+
+def _same_name(a: str, b: str) -> bool:
+    """Whether two names are the same business's, however spaced or shortened:
+    'North Star Paving' and 'Northstar Inc' are, and so are 'E J Paving Co'
+    and 'EJ Paving'; 'Unity Home Care' and 'Bright Smiles Dental' aren't."""
+    left = {w for w in _words(a) if w not in _BUSINESS_WORDS}
+    right = {w for w in _words(b) if w not in _BUSINESS_WORDS}
+    if left & right:
+        return True
+    joined_a, joined_b = "".join(_words(a)), "".join(_words(b))
+    if (any(len(w) >= 4 and w in joined_b for w in left)
+            or any(len(w) >= 4 and w in joined_a for w in right)):
+        return True
+    short, long_ = sorted((_compact(a), _compact(b)), key=len)
+    return (len(short) >= 2 and short == long_) or (len(short) >= 4 and short in long_)
+
+
+def _domain(url: str) -> str:
+    """'https://www.chscompanies.com/about' -> 'chscompanies.com'."""
+    host = re.sub(r"^[a-z]+://", "", (url or "").strip().lower()).split("/")[0].split(":")[0]
+    return host[4:] if host.startswith("www.") else host
+
+
+# Toll-free numbers are often a shared call center serving many businesses,
+# so they prove nothing about which one a listing is.
+_TOLL_FREE = {"800", "833", "844", "855", "866", "877", "888"}
+
+
+def _phone_key(phone: str) -> str:
+    """The 10 digits of a US number, or '' — '+1 (215) 555-0134' -> '2155550134'."""
+    digits = re.sub(r"\D", "", phone or "")
+    if len(digits) == 11 and digits.startswith("1"):
+        digits = digits[1:]
+    return digits if len(digits) == 10 and digits[:3] not in _TOLL_FREE else ""
+
+
+def match_listing(places: list[dict], search_name: str, address: str, zip5: str,
+                  names: tuple[str, ...] = (), phones: tuple[str, ...] = (),
+                  domains: tuple[str, ...] = ()) -> Listing:
+    """Pick the listing that is provably this business, or none.
+
+    names: other names it goes by (legal name, the official's name); domains:
+    its own email domain; phones: numbers the registry lists for it. Any of
+    them can confirm an address match."""
     numbers = _street_numbers(address)
     core = _street_core(address)
+    all_names = [n for n in (search_name,) + tuple(names) if n]
+    known_phones = {_phone_key(p) for p in phones} - {""}
+    own_domains = {d.lower() for d in domains if d}
+    neighbour, by_phone = "", None
 
     for place in places:
         place_address = place.get("address") or ""
         place_words = set(_words(place_address))
         if numbers and core and numbers & place_words and core <= place_words:
-            return _listing(place, "address")
+            title = place.get("title") or ""
+            if any(_same_name(n, title) for n in all_names) or _domain(place.get("website")) in own_domains:
+                return _listing(place, "address")
+            # The same phone under another name: most often the business was
+            # renamed or sold, so the registry's contact may be out of date.
+            if by_phone is None and _phone_key(place.get("phoneNumber") or "") in known_phones:
+                by_phone = place
+            neighbour = neighbour or title
 
     for place in places:
         place_address = place.get("address") or ""
         if zip5 and zip5 in place_address and _name_overlap(search_name, place.get("title", "")) >= 0.6:
             return _listing(place, "name + zip")
 
+    if by_phone is not None:
+        return _listing(by_phone, "address + phone")
+    if neighbour:
+        return Listing(note=f"the only listing at this address is another business ({neighbour})")
     return Listing(note=f"no listing matched ({len(places)} checked)" if places else "no listings found")
 
 
@@ -179,9 +253,11 @@ class PlacesClient:
             raise ConnectionError(f"Serper returned {response.status_code}")
         return response.json().get("places") or []
 
-    def find(self, search_name: str, address: str, city: str, state: str, zip5: str) -> Listing:
+    def find(self, search_name: str, address: str, city: str, state: str, zip5: str,
+             names: tuple[str, ...] = (), phones: tuple[str, ...] = (),
+             domains: tuple[str, ...] = ()) -> Listing:
         query = f"{search_name}, {address}, {city}, {state} {zip5}".strip()
-        return match_listing(self.search(query), search_name, address, zip5)
+        return match_listing(self.search(query), search_name, address, zip5, names, phones, domains)
 
     def close(self) -> None:
         self._session.close()

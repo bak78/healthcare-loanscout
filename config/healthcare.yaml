@@ -49,6 +49,28 @@ franchise_domains: [
   thejoint.com, 100percentchiropractic.com,
 ]
 
+# National chains and large companies: each store, clinic or branch registers
+# its own NPI, so a single location can look like a small practice. A website
+# or email on one of these domains means it's left out before any paid email
+# search (to <results>_left_out.csv). Add any you spot in the results.
+national_chains: [
+  # pharmacies and stores
+  cvs.com, walgreens.com, riteaid.com, walmart.com, samsclub.com, costco.com, target.com,
+  kroger.com, stopandshop.com, giantfood.com, gianteagle.com, weismarkets.com, safeway.com,
+  shoprite.com, wegmans.com, publix.com, harristeeter.com, foodlion.com, hannaford.com,
+  # home care, hospice and medical equipment
+  lincare.com, apria.com, adapthealth.com, rotech.com, aveanna.com, accentcare.com,
+  amedisys.com, centerwell.com, lhcgroup.com, bayada.com, maximhealthcare.com,
+  brightspringhealth.com, encompasshealth.com, gentiva.com,
+  # clinics, therapy, dental, eye care, labs, dialysis
+  concentra.com, medexpress.com, patientfirst.com, citymd.com, novacare.com, selectmedical.com,
+  athletico.com, atipt.com, ivyrehab.com, upstreamrehab.com, benchmarkpt.com,
+  aspendental.com, myeyedr.com, lenscrafters.com, visionworks.com, americasbest.com,
+  questdiagnostics.com, labcorp.com, davita.com, fmcna.com, freseniuskidneycare.com,
+  # not healthcare at all, but sometimes registered
+  uhaul.com, theupsstore.com,
+]
+
 # Healthcare fields, in the order shown in the window's Field list.
 #   name        what the CSV's "field" column says
 #   taxonomies  NPI specialty names searched for this field. An organization

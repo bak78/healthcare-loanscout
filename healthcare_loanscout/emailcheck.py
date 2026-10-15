@@ -89,6 +89,9 @@ class EmailChecker:
             return "placeholder address"
         if domain in _TYPO_DOMAINS:
             return f"misspelled domain (meant {_TYPO_DOMAINS[domain]}?)"
+        # Gmail usernames are 6 to 30 letters and numbers; dots don't count.
+        if domain == "gmail.com" and len(mailbox.split("+")[0].replace(".", "")) < 6:
+            return "not a possible Gmail address (too short)"
         if domain in _KNOWN_GOOD:
             return ""
         return self._domain_problem(domain)

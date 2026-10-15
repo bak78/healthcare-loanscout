@@ -88,6 +88,7 @@ class HealthRules:
     email_finder_when: str = "missing"
     chain_min_companies: int = 3
     franchise_domains: tuple[str, ...] = ()
+    national_chains: tuple[str, ...] = ()
 
     @property
     def field_names(self) -> tuple[str, ...]:
@@ -178,6 +179,7 @@ def load_health_rules(path: Path | str = DEFAULT_HEALTHCARE_PATH) -> HealthRules
         email_finder_when=_email_finder_when(raw.get("email_finder_when", "missing")),
         chain_min_companies=int(raw.get("chain_min_companies", 3)),
         franchise_domains=tuple(str(d).strip().lower() for d in raw.get("franchise_domains") or []),
+        national_chains=tuple(str(d).strip().lower() for d in raw.get("national_chains") or []),
     )
 
 

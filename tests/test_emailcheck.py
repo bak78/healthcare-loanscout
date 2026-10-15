@@ -31,7 +31,7 @@ def checker(**table):
     return EmailChecker(resolver=FakeResolver({k.replace("_", "."): v for k, v in table.items()}))
 
 
-@pytest.mark.parametrize("email", ["jane@gmail.com", "Mike.Spano@Comcast.net", "office@yahoo.com"])
+@pytest.mark.parametrize("email", ["janedoe@gmail.com", "Mike.Spano@Comcast.net", "office@yahoo.com"])
 def test_big_providers_pass_without_asking_dns(email):
     c = checker()
     assert c.problem(email) == ""
@@ -84,3 +84,12 @@ def test_each_domain_is_asked_once():
     c.ok("a@spanoandsons.com")
     c.ok("b@spanoandsons.com")
     assert c._resolver.asked == ["spanoandsons.com"]
+
+
+def test_a_gmail_address_too_short_to_exist_fails():
+    from healthcare_loanscout.emailcheck import EmailChecker
+    checker = EmailChecker()
+    assert checker.problem("0@gmail.com") == "not a possible Gmail address (too short)"
+    assert checker.problem("j.o.e@gmail.com") != ""
+    assert checker.problem("joesmith@gmail.com") == ""
+    assert checker.problem("j.smith+leads@gmail.com") == ""

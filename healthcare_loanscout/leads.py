@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import date
 
 from .config import Rules
-from .contacts import is_role_address
+from .contacts import is_role_address, is_wrong_department
 from .crawl import SiteCrawl, crawl_site, is_crawlable, registered_domain
 from .emailcheck import FREE_MAIL, EmailChecker, domain_of
 from .fetch import PoliteFetcher
@@ -86,6 +86,18 @@ def google_hits(listing: Listing, health: HealthRules) -> list[SignalHit]:
     return hits
 
 
+def national_chain_hits(website: str, email: str, chains: tuple[str, ...]) -> list[SignalHit]:
+    """A disqualifying hit when the website or email belongs to a national
+    chain (national_chains in healthcare.yaml): a CVS or Walgreens location
+    registers its own NPI, but isn't a small-business borrower."""
+    domains = {registered_domain(website) if website else "", domain_of(email) if email else ""}
+    for domain in sorted(d for d in domains if d in chains):
+        return [SignalHit(signal_id="national_chain", category="disqualify", weight=0.0,
+                          snippet=f"{domain} is a national chain (national_chains in healthcare.yaml)",
+                          source_url=website or email, page_type="registry")]
+    return []
+
+
 def _letters(text: str) -> str:
     return re.sub(r"[^a-z]", "", (text or "").lower())
 
@@ -120,12 +132,14 @@ def pick_email(crawl: SiteCrawl | None, org: Organization,
 
     The official's own mailbox beats the site's general best pick: it reaches
     the decision maker instead of the front desk. Only the business's own
-    addresses count, and, given a checker, only ones that pass it."""
+    addresses count, never a department's (hr@, billing@), and, given a
+    checker, only ones that pass it."""
     if crawl is None or not crawl.pages:
         return "", "", False
 
     def usable(email: str) -> bool:
-        return email_is_theirs(email, crawl.domain) and (checker is None or checker.ok(email))
+        return (email_is_theirs(email, crawl.domain) and not is_wrong_department(email)
+                and (checker is None or checker.ok(email)))
 
     for page in crawl.pages:
         for email in page.contacts.emails:
@@ -159,8 +173,11 @@ def build_lead(
     if places is None:
         listing = Listing(note="preview: not looked up")
     else:
-        listing = places.find(org.search_name, org.address, org.city, org.state, org.zip)
-        if not listing.matched_on:
+        official = f"{org.official_first} {org.official_last}".strip()
+        listing = places.find(org.search_name, org.address, org.city, org.state, org.zip,
+                              names=(org.legal_name, org.dba, official),
+                              phones=(org.phone, org.official_phone))
+        if not listing.matched_on and "another business" not in listing.note:
             listing = Listing(note=f"{listing.note}; may have closed or moved")
 
     crawl = None
@@ -172,6 +189,7 @@ def build_lead(
     # The website's own signals. One that disqualifies the organization
     # (a nonprofit, a lender, a public company…) means no paid email search.
     site_hits = match_site(crawl.pages, rules) if crawl is not None and crawl.pages else []
+    site_hits += national_chain_hits(listing.website, email, health.national_chains)
     disqualified = any(h.category == "disqualify" for h in site_hits)
 
     # The website gave no email (or, set to "always", only a front-desk one):

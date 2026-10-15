@@ -23,7 +23,7 @@ from .config import ConfigError, load_settings
 from .cleanup import LeftOutWriter, leave_out_chains, left_out_path, never_a_chain
 from .crawl import DEFAULT_MAX_PAGES
 from .emailcheck import EmailChecker
-from .export import COLUMNS, CsvWriter, build_row, sort_csv_by_score
+from .export import COLUMNS, CsvWriter, build_row, remembered_emails, sort_csv_by_score
 from .fetch import PoliteFetcher
 from .anymailfinder import AnymailfinderClient
 from .emailfinder import EmailFinderUnavailable
@@ -251,7 +251,7 @@ def run_leads(options: RunOptions, stop: threading.Event | None = None,
                                          lead.score.disqualify_reason)
                                 continue
 
-                            if health.require_email and (not lead.email or lead.email in used_emails):
+                            if health.require_email and (not lead.email or lead.email.lower() in used_emails):
                                 # Done either way: the lookup was paid for, and
                                 # a re-run would find the same website.
                                 writer.mark_done(org.key)
@@ -266,7 +266,7 @@ def run_leads(options: RunOptions, stop: threading.Event | None = None,
 
                             row = build_row(lead, rules)
                             writer.write(row)
-                            used_emails.add(lead.email)
+                            used_emails.add(lead.email.lower())
                             _tally(summary, row, lead)
                             log.info("%-36.36s %-22.22s score=%-5s %s",
                                      org.company_name,
@@ -317,6 +317,8 @@ def make_email_finder(settings):
 
 def _why_no_email(lead, email_finder) -> str:
     if not lead.listing.matched_on:
+        if "another business" in lead.listing.note:
+            return "Google shows only another business at this address"
         return "no Google listing"
     if not lead.listing.website:
         return "Google listing has no website"
@@ -328,12 +330,15 @@ def _why_no_email(lead, email_finder) -> str:
 
 
 def emails_in(path: str) -> set[str]:
-    """Emails already in the output, so a later run doesn't list an inbox twice."""
+    """Emails already used — in the output, or in an earlier batch whose
+    results file has since been deleted — so no inbox is listed twice."""
+    used = set(remembered_emails(path))
     try:
         with open(path, newline="", encoding="utf-8") as handle:
-            return {row["email"] for row in csv.DictReader(handle) if row.get("email")}
+            used |= {row["email"].strip().lower() for row in csv.DictReader(handle) if row.get("email")}
     except (OSError, KeyError):
-        return set()
+        pass
+    return used
 
 
 def _tally(summary: RunSummary, row: dict, lead) -> None:

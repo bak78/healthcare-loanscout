@@ -41,7 +41,7 @@ class StubPlaces:
         self.lookups = 0
         self.queries = []
 
-    def find(self, *args):
+    def find(self, *args, **kwargs):
         self.lookups += 1
         self.queries.append(args)
         if self.error:
@@ -258,7 +258,7 @@ def test_stop_during_lookups_keeps_finished_rows(workdir):
     stop = threading.Event()
 
     class SlowPlaces(StubPlaces):
-        def find(self, *args):
+        def find(self, *args, **kwargs):
             stop.set()  # pressing Stop while the first lookups are in flight
             return super().find(*args)
 

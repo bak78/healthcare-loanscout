@@ -175,6 +175,7 @@ class CsvWriter:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.seen_path = self.path.with_name(f"{self.path.stem}.seen.txt")
+        self.emails_path = emails_path(self.path)
         self.track_seen = track_seen
 
         self._lock = threading.Lock()
@@ -206,6 +207,11 @@ class CsvWriter:
         self._seen_file = (
             self.seen_path.open("a" if resume else "w", encoding="utf-8") if track_seen else None
         )
+        # The same for every email written, so a later batch never lists an
+        # inbox an earlier one did, after that batch's results file is gone.
+        self._emails_file = (
+            self.emails_path.open("a" if resume else "w", encoding="utf-8") if track_seen else None
+        )
 
     def write(self, row: dict) -> None:
         with self._lock:
@@ -214,6 +220,9 @@ class CsvWriter:
             if self._seen_file is not None:
                 self._seen_file.write(f"{row['key']}\n")
                 self._seen_file.flush()
+            if self._emails_file is not None and row.get("email"):
+                self._emails_file.write(f"{row['email'].strip().lower()}\t{row['key']}\n")
+                self._emails_file.flush()
             self.seen.add(row["key"])
 
     def mark_done(self, key: str) -> None:
@@ -232,12 +241,34 @@ class CsvWriter:
         self._file.close()
         if self._seen_file is not None:
             self._seen_file.close()
+        if self._emails_file is not None:
+            self._emails_file.close()
 
     def __enter__(self) -> "CsvWriter":
         return self
 
     def __exit__(self, *exc_info) -> None:
         self.close()
+
+
+def emails_path(results: Path | str) -> Path:
+    """<results>.emails.txt: every email ever written, one per line, with its key."""
+    results = Path(results)
+    return results.with_name(f"{results.stem}.emails.txt")
+
+
+def remembered_emails(results: Path | str) -> dict[str, str]:
+    """{email: key} from the email memory; empty when there is none yet."""
+    try:
+        lines = emails_path(results).read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return {}
+    found: dict[str, str] = {}
+    for line in lines:
+        email, _, key = line.strip().partition("\t")
+        if email:
+            found.setdefault(email.lower(), key)
+    return found
 
 
 def _upgrade_columns(path: Path) -> None:
